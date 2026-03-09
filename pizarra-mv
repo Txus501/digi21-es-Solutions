@@ -1,6 +1,0 @@
-pizarra-mv/
-  index.html
-  netlify.toml
-  netlify/
-    functions/
-      pedidos.mjs
