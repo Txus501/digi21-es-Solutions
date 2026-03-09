@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MV Genérico · Pago</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <script defer src="/assets/utils.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const q = new URLSearchParams(location.search);
+      const brand = q.get('brand') || 'Mi Negocio';
+      const logo = q.get('logo') || '';
+      const color = q.get('color') || '#0ea5e9';
+      const senia = parseFloat(q.get('senia') || '0');
+      const moneda = q.get('moneda') || 'EUR';
+
+      document.documentElement.style.setProperty('--brand-color', color);
+
+      const hBrand = document.querySelector('#brand');
+      const hLogo = document.querySelector('#logo');
+      hBrand.textContent = brand;
+      if (logo) { hLogo.src = logo; hLogo.alt = brand; hLogo.style.display = 'block'; }
+
+      let pedido = null;
+      try {
+        const p64 = q.get('pedido');
+        if (p64) pedido = JSON.parse(Utils.base64UrlDecodeToString(p64));
+      } catch (e) { console.warn('Pedido inválido', e); }
+
+      // Calcular totales
+      let subtotal = 0;
+      if (pedido) {
+        pedido.mesas.forEach(m => {
+          (m.items || []).forEach(i => { subtotal += (i.precio || 0) * (i.cant || 1); });
+        });
+      }
+      const pendiente = Math.max(0, subtotal - senia);
+
+      // Render resumen
+      const resumen = document.querySelector('#resumen');
+      resumen.innerHTML = `
+        ${senia > 0 ? `<div class="pago-row"><span>Subtotal</span><span>${Utils.formatMoney(subtotal, moneda)}</span></div>` : ''}
+        ${senia > 0 ? `<div class="pago-row"><span>Señal pagada</span><span>- ${Utils.formatMoney(senia, moneda)}</span></div>` : ''}
+        <div class="pago-row total"><span>Total a cobrar</span><span>${Utils.formatMoney(pendiente, moneda)}</span></div>
+      `;
+
+      // Método de pago
+      let metodoActivo = null;
+      document.querySelectorAll('.metodo-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.metodo-btn').forEach(b => b.classList.remove('activo'));
+          btn.classList.add('activo');
+          metodoActivo = btn.dataset.metodo;
+          document.querySelector('#btn-cobrar').disabled = false;
+        });
+      });
+
+      // Cobrar
+      document.querySelector('#btn-cobrar').addEventListener('click', () => {
+        if (!metodoActivo) return;
+        document.querySelector('#confirmacion').style.display = 'flex';
+        document.querySelector('#conf-metodo').textContent = metodoActivo.toUpperCase();
+        document.querySelector('#conf-total').textContent = Utils.formatMoney(pendiente, moneda);
+      });
+
+      document.querySelector('#btn-confirmar').addEventListener('click', () => {
+        alert(`✅ Cobro registrado: ${Utils.formatMoney(pendiente, moneda)} en ${metodoActivo}`);
+        location.href = `./index.html?brand=${encodeURIComponent(brand)}&color=${encodeURIComponent(color)}&moneda=${moneda}`;
+      });
+
+      document.querySelector('#btn-cancelar').addEventListener('click', () => {
+        document.querySelector('#confirmacion').style.display = 'none';
+      });
+    });
+  </script>
+  <style>
+    #confirmacion {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .conf-box {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 2rem;
+      max-width: 320px;
+      width: 90%;
+      text-align: center;
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .conf-box h3 { font-size: 1.1rem; }
+    .conf-box p { color: #64748b; font-size: 0.9rem; }
+    .conf-amount { font-size: 2rem; font-weight: 800; color: var(--brand-color); }
+    .conf-actions { display: flex; gap: 0.5rem; }
+    .conf-actions button { flex: 1; padding: 0.7rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <img id="logo" class="logo" style="display:none"/>
+    <h1 id="brand"></h1>
+  </header>
+
+  <div class="pago-wrap">
+    <div class="pago-card">
+      <h2>Resumen del cobro</h2>
+      <div id="resumen"></div>
+    </div>
+
+    <div class="pago-card">
+      <h2>Método de pago</h2>
+      <div class="metodos">
+        <button class="metodo-btn" data-metodo="efectivo">
+          <span class="icon">💵</span> Efectivo
+        </button>
+        <button class="metodo-btn" data-metodo="tarjeta">
+          <span class="icon">💳</span> Tarjeta
+        </button>
+        <button class="metodo-btn" data-metodo="bizum">
+          <span class="icon">📱</span> Bizum
+        </button>
+        <button class="metodo-btn" data-metodo="otro">
+          <span class="icon">🔄</span> Otro
+        </button>
+      </div>
+    </div>
+
+    <button id="btn-cobrar" class="cobrar-btn" disabled>Cobrar</button>
+  </div>
+
+  <div id="confirmacion">
+    <div class="conf-box">
+      <h3>Confirmar cobro</h3>
+      <div class="conf-amount" id="conf-total"></div>
+      <p>Método: <strong id="conf-metodo"></strong></p>
+      <div class="conf-actions">
+        <button id="btn-cancelar">Cancelar</button>
+        <button id="btn-confirmar" style="background:var(--brand-color);color:#fff;border-color:var(--brand-color)">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">MV Genérico · Paramétrico por URL</footer>
+</body>
+</html>
