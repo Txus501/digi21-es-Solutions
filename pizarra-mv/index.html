@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MV Genérico · Pizarra</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <script defer src="/assets/utils.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const q = new URLSearchParams(location.search);
+      const vista = (q.get('vista') || 'sala').toLowerCase();
+      const brand = q.get('brand') || 'Mi Negocio';
+      const logo = q.get('logo') || '';
+      const color = q.get('color') || '#0ea5e9';
+      const senia = parseFloat(q.get('senia') || '0');
+      const moneda = q.get('moneda') || 'EUR';
+
+      document.documentElement.style.setProperty('--brand-color', color);
+
+      const hBrand = document.querySelector('#brand');
+      const hLogo = document.querySelector('#logo');
+      hBrand.textContent = brand;
+      if (logo) { hLogo.src = logo; hLogo.alt = brand; hLogo.style.display = 'block'; }
+
+      let pedido = null;
+      try {
+        const p64 = q.get('pedido');
+        if (p64) pedido = JSON.parse(Utils.base64UrlDecodeToString(p64));
+      } catch (e) { console.warn('Pedido inválido', e); }
+
+      const content = document.querySelector('#content');
+      if (vista === 'cocina') {
+        renderCocina(content, pedido, moneda);
+      } else {
+        renderSala(content, pedido, moneda);
+      }
+
+      const btnPago = document.querySelector('#btn-pago');
+      btnPago.addEventListener('click', () => {
+        const base = new URL('./pago.html', location.origin).toString();
+        const url = new URL(base);
+        url.searchParams.set('brand', brand);
+        if (logo) url.searchParams.set('logo', logo);
+        url.searchParams.set('color', color);
+        url.searchParams.set('senia', isFinite(senia) ? String(senia) : '0');
+        url.searchParams.set('moneda', moneda);
+        if (pedido) url.searchParams.set('pedido', Utils.base64UrlEncode(JSON.stringify(pedido)));
+        location.href = url.toString();
+      });
+    });
+
+    function renderSala(node, pedido, moneda) {
+      node.innerHTML = `<h2 class="subtitle">Vista Sala</h2>` +
+        (pedido ? pedido.mesas.map(m => templateMesa(m, moneda)).join('') :
+        `<div class="empty">Sin pedido. Pasa ?pedido=BASE64</div>`);
+    }
+
+    function renderCocina(node, pedido, moneda) {
+      node.innerHTML = `<h2 class="subtitle">Pases de Cocina</h2>` +
+        (pedido ? pedido.mesas.flatMap(m => (m.items||[]).map(i => templatePase(m, i, moneda))).join('') :
+        `<div class="empty">Sin pedido. Pasa ?pedido=BASE64</div>`);
+    }
+
+    function templateMesa(m, moneda) {
+      const totalMesa = (m.items || []).reduce((a,i)=> a + (i.precio||0)*(i.cant||1), 0);
+      return `<section class="card">
+        <header>
+          <h3>Mesa ${m.mesa} · ${m.comensales||1} pax</h3>
+          <span class="pill">${Utils.formatMoney(totalMesa, moneda)}</span>
+        </header>
+        <ul class="list">
+          ${(m.items||[]).map(i => `<li>
+            <strong>${i.cant||1}×</strong> ${i.nombre||'-'}
+            <em>${i.notas? ' · '+Utils.escape(i.notas): ''}</em>
+            <span>${Utils.formatMoney((i.precio||0)*(i.cant||1), moneda)}</span>
+          </li>`).join('')}
+        </ul>
+      </section>`
+    }
+
+    function templatePase(m, i, moneda){
+      return `<section class="ticket">
+        <div class="row">
+          <strong>${i.cant||1}×</strong>
+          <h4>${i.nombre||'-'}</h4>
+          <span class="time">Mesa ${m.mesa}</span>
+        </div>
+        ${i.notas ? `<div class="notes">${Utils.escape(i.notas)}</div>` : ''}
+      </section>`
+    }
+  </script>
+</head>
+<body>
+  <header class="top">
+    <img id="logo" class="logo" style="display:none"/>
+    <h1 id="brand"></h1>
+    <button id="btn-pago" class="btn">Ir a pago</button>
+  </header>
+  <main id="content" class="container"></main>
+  <footer class="foot">MV Genérico · Paramétrico por URL</footer>
+</body>
+</html>
